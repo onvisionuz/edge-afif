@@ -1,0 +1,196 @@
+# ============================================================================
+# Chocolate Counter Configuration
+# Adapted for existing project structure
+# ============================================================================
+
+# -----------------------------------------------------------------------------
+# PATHS CONFIGURATION
+# -----------------------------------------------------------------------------
+paths:
+  # Model file (adjust the run number if different)
+  model: "runs/detect/chocolate_detector/weights/best.pt"
+
+  # Input video - place your test videos here
+  input_video: ""
+
+  # Output paths - use "auto" to auto-generate from input filename
+  # "auto" will create: counted_{input_filename}.mp4
+  output_video: "auto"
+  output_csv: "auto"
+  output_json: "auto"
+  error_log: "output/logs/errors.log"
+
+# -----------------------------------------------------------------------------
+# ROI (Region of Interest) - WHITE CONVEYOR BELT AREA ONLY
+# -----------------------------------------------------------------------------
+# Uses fractional coordinates (0.0 to 1.0) - works for any resolution
+# Adjust these based on your actual camera view
+roi:
+  x1: 0.25    # Left edge: 25% from left (excludes debris on left side)
+  y1: 0.15    # Top edge: 15% from top (captures full belt from top)
+  x2: 0.95    # Right edge: 95% from left (belt extends almost to right)
+  y2: 0.92    # Bottom edge: 92% from top (full belt coverage)
+
+  # Set to true to interactively adjust ROI on first frame
+  interactive_setup: false
+
+# -----------------------------------------------------------------------------
+# COUNTING LINE CONFIGURATION
+# -----------------------------------------------------------------------------
+counting_line:
+  # Position within ROI (0.0 = top of ROI, 1.0 = bottom of ROI)
+  position: 0.75        # 75% down from top of ROI (gives chocolates time to stabilize)
+
+  # Direction: "down" | "up" | "both"
+  # "down" = count chocolates moving downward (top to bottom)
+  # "up" = count chocolates moving upward (bottom to top)
+  # "both" = count in both directions
+  direction: "down"
+
+  # Margin around line (pixels) - helps catch edge cases
+  margin: 5
+
+# -----------------------------------------------------------------------------
+# DETECTION PARAMETERS
+# -----------------------------------------------------------------------------
+detection:
+  # Confidence threshold (0.0 - 1.0)
+  # Lower = more detections (may include false positives)
+  # Higher = fewer detections (may miss some chocolates)
+  # Recommended range: 0.30 - 0.40
+  confidence_threshold: 0.35
+
+  # IOU threshold for non-maximum suppression
+  # Controls how much overlap is allowed between detections
+  iou_threshold: 0.45
+
+  # Device: 'cuda' for GPU, 'cpu' for CPU, or '0' for first GPU
+  device: "cuda"
+
+  # Image size for inference (smaller = faster, larger = more accurate)
+  imgsz: 640
+
+# -----------------------------------------------------------------------------
+# TRACKING PARAMETERS
+# -----------------------------------------------------------------------------
+tracking:
+  # Tracker type: "bytetrack" (recommended) | "botsort"
+  tracker_type: "bytetrack"
+
+  # Minimum track age (frames) before counting
+  # Filters out noise and brief false detections
+  # Too low (1-2): May count glitches
+  # Too high (5+): May miss fast-moving chocolates
+  min_track_age: 3
+
+  # Maximum frames to keep lost tracks alive
+  # Handles brief occlusions (shadows, overlaps)
+  # Too low (2-5): Loses tracks during occlusions
+  # Too high (20+): Keeps dead tracks too long
+  max_lost_frames: 10
+
+  # Persist tracks between frames
+  persist: true
+
+# -----------------------------------------------------------------------------
+# VISUALIZATION SETTINGS
+# -----------------------------------------------------------------------------
+visualization:
+  # What to show on output video
+  show_roi: true                # Green ROI rectangle
+  show_line: true               # Red counting line
+  show_track_ids: true          # Track ID numbers above boxes
+  show_trails: false            # Path trails (last N positions)
+  show_confidence: false        # Confidence scores
+  show_fps: true                # FPS counter
+  show_stats: true              # Active tracks, total count
+
+  # Visual styling
+  font_scale: 1.0               # Text size multiplier
+  line_thickness: 3             # Thickness for boxes and lines (thicker for visibility)
+  roi_thickness: 3              # ROI rectangle thickness
+  counting_line_thickness: 4    # Counting line thickness (most prominent)
+  trail_length: 10              # Number of points in trail
+
+  # Colors (BGR format)
+  colors:
+    roi: [0, 255, 0]              # Bright green for ROI
+    line: [0, 0, 255]             # Red for counting line
+    uncounted_box: [0, 255, 255]  # Yellow for uncounted chocolates
+    counted_box: [0, 165, 255]    # Orange for counted chocolates
+    track_id: [255, 255, 255]     # White text
+    counter_text: [0, 255, 0]     # Green counter
+
+# -----------------------------------------------------------------------------
+# LOGGING & OUTPUT
+# -----------------------------------------------------------------------------
+logging:
+  # Enable detailed CSV logging
+  enable_csv: true
+
+  # Enable event logging (each crossing event)
+  enable_events: true
+
+  # Enable summary JSON
+  enable_summary: true
+
+  # Console output frequency
+  progress_interval: 30         # Print progress every N frames
+
+  # Verbose mode (detailed console output)
+  verbose: true
+
+# -----------------------------------------------------------------------------
+# PERFORMANCE SETTINGS
+# -----------------------------------------------------------------------------
+performance:
+  # Process every Nth frame (1 = all frames, 2 = every other frame)
+  frame_skip: 1
+
+  # Enable GPU acceleration
+  use_gpu: true
+
+  # Batch processing (experimental - may not work with tracking)
+  batch_size: 1
+
+  # Video writer codec ('mp4v', 'XVID', 'avc1')
+  output_codec: "mp4v"
+
+  # Output video quality (0-10, higher = better quality, larger file)
+  output_quality: 8
+
+# -----------------------------------------------------------------------------
+# DEBUG & TESTING
+# -----------------------------------------------------------------------------
+debug:
+  # Save debug frames (useful for troubleshooting)
+  save_debug_frames: false
+  debug_frames_dir: "output/debug_frames"
+
+  # Frame range for testing (null = process entire video)
+  # Example: [0, 100] = process only first 100 frames
+  frame_range: null
+
+  # Display output video in real-time (may slow processing)
+  display_realtime: false
+
+  # Maximum frames to process (null = no limit)
+  max_frames: null
+
+# -----------------------------------------------------------------------------
+# ADVANCED SETTINGS
+# -----------------------------------------------------------------------------
+advanced:
+  # Handle edge cases
+  skip_corrupted_frames: true
+
+  # Minimum chocolate size (pixels) - filters tiny detections
+  min_object_size: 10
+
+  # Maximum chocolate size (pixels) - filters huge false detections
+  max_object_size: 500
+
+  # Zone-based counting (experimental)
+  # Only count if chocolate entered from specific zone
+  use_entry_zone: false
+  entry_zone_y: 0.2            # Top 20% of ROI
