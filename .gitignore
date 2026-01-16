@@ -1,2 +1,4 @@
 dataset/
-inference_results/
+old-dataset/
+.claude
+runs/detect/chocolate_detector/
