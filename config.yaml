@@ -4,13 +4,31 @@
 # ============================================================================
 
 # -----------------------------------------------------------------------------
+# INPUT CONFIGURATION
+# -----------------------------------------------------------------------------
+# Two modes supported: "video" (file) or "rtsp" (camera stream)
+# RTSP URLs are loaded from .env file for security (NOT stored here)
+input:
+  mode: "video"                        # "video" | "rtsp"
+  video_path: "videos/input/test.mp4"  # Used when mode="video"
+
+# -----------------------------------------------------------------------------
+# OUTPUT CONFIGURATION
+# -----------------------------------------------------------------------------
+# Control what gets saved/displayed during processing
+# Both default to OFF for production safety
+output:
+  save_video: false    # Save annotated video (use --save-video to enable)
+  show_video: false    # Show real-time display (use --show to enable)
+
+# -----------------------------------------------------------------------------
 # PATHS CONFIGURATION
 # -----------------------------------------------------------------------------
 paths:
   # Model file (adjust the run number if different)
-  model: "runs/detect/chocolate_detector/weights/best.pt"
+  model: "runs/detect/chocolate_detector3/weights/best.pt"
 
-  # Input video - place your test videos here
+  # Legacy support: input_video (prefer input.video_path instead)
   input_video: ""
 
   # Output paths - use "auto" to auto-generate from input filename

@@ -2,3 +2,18 @@ dataset/
 old-dataset/
 .claude
 runs/detect/chocolate_detector/
+
+# Environment variables (contains sensitive RTSP credentials)
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Output files
+output/videos/
+output/logs/
+*.log
