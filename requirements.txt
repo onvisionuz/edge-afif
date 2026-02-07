@@ -1,0 +1,21 @@
+# Chocolate Counter - Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core ML Framework
+ultralytics>=8.0.0          # YOLOv8 object detection & tracking
+torch>=2.0.0                # PyTorch backend
+torchvision>=0.15.0         # Vision utilities
+
+# Computer Vision
+opencv-python>=4.8.0        # Video capture, image processing, display
+
+# Data Processing
+numpy>=1.24.0               # Array operations
+pandas>=2.0.0               # CSV logging and data manipulation
+
+# Configuration
+pyyaml>=6.0                 # YAML config file parsing
+python-dotenv>=1.0.0        # Load RTSP credentials from .env file
+
+# Optional: GPU Acceleration (uncomment if using NVIDIA GPU)
+# nvidia-tensorrt            # TensorRT optimization (requires CUDA)
