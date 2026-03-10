@@ -18,11 +18,19 @@ import pandas as pd
 import json
 import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Tuple, Optional, Union
 from collections import defaultdict, deque
 from ultralytics import YOLO
 import logging
+import sqlite3
+import requests
+import threading
+import time
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Load environment variables from .env file
 try:
@@ -30,6 +38,128 @@ try:
     load_dotenv()
 except ImportError:
     pass  # python-dotenv not installed, will use system env vars only
+
+
+class EventSender:
+    """
+    Handles buffering and batched sending of detection events to a server.
+    Uses a local SQLite database for resilient queueing during network outages.
+    """
+    def __init__(self, config: dict, db_path: str = "events.db"):
+        self.config = config
+        self.db_path = db_path
+        self._init_db()
+        self.running = True
+
+        # Read server configuration from environment variables
+        self.flush_interval = int(os.getenv("FLUSH_INTERVAL_SECONDS", "5"))
+        self.batch_size = int(os.getenv("BATCH_SIZE", "50"))
+        self.endpoint_url = os.getenv("SERVER_URL", "")
+
+        self.logger = logging.getLogger(__name__ + ".EventSender")
+
+        # Start background worker
+        if self.endpoint_url:
+            self.thread = threading.Thread(target=self._worker_loop, daemon=True)
+            self.thread.start()
+        else:
+            self.logger.warning("No endpoint_url configured. Events will be saved locally but not sent.")
+
+    def _init_db(self):
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    payload TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            conn.commit()
+
+    def add_event(self, payload: dict):
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO events (payload) VALUES (?)', (json.dumps(payload),))
+            conn.commit()
+
+    def _worker_loop(self):
+        while self.running:
+            try:
+                self._flush_events()
+            except Exception as e:
+                self.logger.error(f"Error in EventSender worker: {e}")
+            time.sleep(self.flush_interval)
+
+        # Final flush on stop
+        try:
+            self._flush_events()
+        except:
+            pass
+
+    def _flush_events(self):
+        if not self.endpoint_url:
+            return
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # Fetch batch of unsent events
+            cursor.execute('SELECT id, payload FROM events ORDER BY id ASC LIMIT ?', (self.batch_size,))
+            rows = cursor.fetchall()
+
+            if not rows:
+                return
+
+            event_ids = [row['id'] for row in rows]
+            payloads = [json.loads(row['payload']) for row in rows]
+
+            # Send HTTP POST with batch wrapper
+            try:
+                # Construct batch payload with manufacture_id wrapper
+                manufacture_id = int(os.getenv("MANUFACTURE_ID", "0"))
+                batch_payload = {
+                    "manufacture_id": manufacture_id,
+                    "detections": payloads  # Events nested under "detections" key
+                }
+
+                # Get API key from environment
+                api_key = os.getenv("API_KEY", "")
+
+                response = requests.post(
+                    self.endpoint_url,
+                    json=batch_payload,
+                    headers={
+                        'Content-Type': 'application/json',
+                        'X-Manufacture-API-Key': api_key
+                    },
+                    timeout=10  # Increased from 5 to 10 seconds
+                )
+
+                # Handle specific response codes
+                if response.status_code == 201:
+                    self.logger.info(f"Successfully sent {len(payloads)} batched events to server.")
+                    # Delete sent events from DB
+                    placeholders = ','.join(['?'] * len(event_ids))
+                    cursor.execute(f'DELETE FROM events WHERE id IN ({placeholders})', event_ids)
+                    conn.commit()
+                elif response.status_code == 401:
+                    self.logger.error(f"Authentication failed: Missing or invalid API key. Check API_KEY in .env")
+                elif response.status_code == 403:
+                    self.logger.error(f"Authorization failed: API key doesn't match manufacture_id. Check MANUFACTURE_ID in .env")
+                elif response.status_code == 422:
+                    self.logger.error(f"Payload validation error: {response.text}")
+                else:
+                    self.logger.warning(f"Failed to send events. Server returned {response.status_code}: {response.text}")
+
+            except requests.exceptions.RequestException as e:
+                self.logger.warning(f"Connection error sending events. Will retry next cycle. {e}")
+
+    def stop(self):
+        self.running = False
+        if hasattr(self, 'thread') and self.thread.is_alive():
+            self.thread.join(timeout=2.0)
 
 
 class ChocolateCounter:
@@ -75,6 +205,9 @@ class ChocolateCounter:
         self.total_count = 0
         self.tracks: Dict[int, dict] = {}  # track_id -> track state
         self.counted_tracks = set()  # Set of track IDs that crossed line
+
+        # Initialize EventSender
+        self.event_sender = EventSender(self.config)
 
         # Statistics
         self.stats = {
@@ -431,6 +564,19 @@ class ChocolateCounter:
                     self.tracks[track_id]['counted'] = True
                     self.counted_tracks.add(track_id)
 
+                    # Generate payload for device (read from environment variables)
+                    event_payload = {
+                        "camera_id": int(os.getenv("CAMERA_ID", "0")),
+                        "product_id": int(os.getenv("PRODUCT_ID", "0")),
+                        "device_id": os.getenv("DEVICE_ID", ""),
+                        "line_id": os.getenv("LINE_ID"),  # Optional, can be None
+                        "detection_class": None,  # For future classification models
+                        "timestamp": datetime.now(timezone.utc).isoformat()  # UTC timezone
+                    }
+
+                    # Queue event to SQLite and to send to server
+                    self.event_sender.add_event(event_payload)
+
                     # Log crossing event
                     self.event_log.append({
                         'event_id': len(self.event_log) + 1,
@@ -779,6 +925,11 @@ class ChocolateCounter:
             self.stats['errors'] += 1
 
         finally:
+            # Stop EventSender gracefully
+            if hasattr(self, 'event_sender'):
+                self.logger.info("Stopping EventSender background thread...")
+                self.event_sender.stop()
+
             # Cleanup
             cap.release()
             if out is not None:

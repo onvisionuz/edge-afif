@@ -1,9 +1,14 @@
 dataset/
 old-dataset/
 .claude
-runs/detect/chocolate_detector/
 
-# Environment variables (contains sensitive RTSP credentials)
+# All trained model weights (large files, deployment-specific)
+runs/detect/
+
+# Event buffer database (runtime data)
+events.db
+
+# Environment variables (contains sensitive RTSP credentials and API keys)
 .env
 
 # Python
@@ -17,3 +22,4 @@ venv/
 output/videos/
 output/logs/
 *.log
+videos/

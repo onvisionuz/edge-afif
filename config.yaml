@@ -212,3 +212,11 @@ advanced:
   # Only count if chocolate entered from specific zone
   use_entry_zone: false
   entry_zone_y: 0.2            # Top 20% of ROI
+
+# -----------------------------------------------------------------------------
+# DEVICE & SERVER HTTP DELIVERY SETTINGS
+# -----------------------------------------------------------------------------
+# NOTE: Device and server configuration has been moved to .env file
+# See .env.example for required environment variables:
+# - SERVER_URL, API_KEY, FLUSH_INTERVAL_SECONDS, BATCH_SIZE
+# - MANUFACTURE_ID, CAMERA_ID, PRODUCT_ID, DEVICE_ID, LINE_ID
